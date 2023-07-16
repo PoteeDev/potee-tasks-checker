@@ -1,0 +1,64 @@
+syntax = "proto3";
+option go_package="proto/";
+
+service Checker {
+  rpc Ping (PingRequest) returns (Reply) {}
+  rpc Get (GetRequest) returns (Reply) {}
+  rpc Put (PutRequest) returns (Reply) {}
+  rpc Exploit (ExploitRequest) returns (Reply) {}
+}
+
+message PingRequest {
+  string service = 1;
+  repeated PingData data = 2;
+}
+
+message PingData {
+  int64 id = 1;
+  string host = 2;
+}
+
+message GetRequest {
+  string service = 1;
+  string name = 2;
+  repeated GetData data = 3;
+}
+
+message GetData {
+  int64 id = 1;
+  string host = 2;
+  string value = 3;
+}
+
+message PutRequest {
+  string service = 1;
+  string name = 2;
+  repeated PutData data = 3;
+}
+
+message PutData {
+  int64 id = 1;
+  string host = 2;
+  string flag = 3;
+}
+message ExploitRequest {
+  string service = 1;
+  string name = 2;
+  repeated ExploitData data = 3;
+}
+
+message ExploitData {
+  int64 id = 1;
+  string host = 2;
+}
+
+message Reply {
+  string service = 1;
+  repeated Result results = 2;
+}
+
+message Result {
+  int64 id = 1;
+  int32 status = 2;
+  string answer = 3;
+}
