@@ -96,7 +96,7 @@ func GenerateInventory(m interface{}) string {
 
 var scriptsSums = make(map[string]string)
 
-func (s *server) DownloadScripts() {
+func DownloadScripts() {
 
 	endpoint := os.Getenv("MINIO_HOST")
 	accessKeyID := os.Getenv("MINIO_ACCESS_KEY")
@@ -217,6 +217,9 @@ func (s *server) Exploit(ctx context.Context, in *pb.ExploitRequest) (*pb.Reply,
 
 func main() {
 	flag.Parse()
+
+	DownloadScripts()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
