@@ -13,6 +13,9 @@ import (
 
 	pb "github.com/PoteeDev/potee-tasks-checker/proto"
 	"google.golang.org/grpc"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func GetSrtingEnvDefault(env, defaults string) string {
@@ -89,6 +92,63 @@ func GenerateInventory(m interface{}) string {
 		log.Fatal(err)
 	}
 	return f.Name()
+}
+
+var scriptsSums = make(map[string]string)
+
+func (s *server) DownloadScripts() {
+
+	endpoint := os.Getenv("MINIO_HOST")
+	accessKeyID := os.Getenv("MINIO_ACCESS_KEY")
+	secretAccessKey := os.Getenv("MINIO_SECRET_KEY")
+	useSSL := false
+
+	// Initialize minio client object.
+	minioClient, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+		Secure: useSSL,
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = minioClient.FGetObject(context.Background(), "scripts", "myobject", "/tmp/myobject", minio.GetObjectOptions{})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	objectCh := minioClient.ListObjects(ctx, "scripts", minio.ListObjectsOptions{
+		Prefix:    "",
+		Recursive: true,
+	})
+	for object := range objectCh {
+		if object.Err != nil {
+			log.Println(object.Err)
+			continue
+		}
+		// check if script changed
+		isNew := true
+		sum, ok := scriptsSums[object.Key]
+		if ok {
+			if sum == object.ETag {
+				isNew = false
+			}
+		}
+
+		// download new version of script if it changed
+		if isNew {
+			err := minioClient.FGetObject(context.Background(), "scripts", object.Key, *directory+object.Key, minio.GetObjectOptions{})
+			if err != nil {
+				log.Println(err)
+			}
+			// update local script sum
+			scriptsSums[object.Key] = object.ETag
+			log.Println("download", object.Key, object.VersionID)
+		}
+	}
 }
 
 func (s *server) Ping(ctx context.Context, in *pb.PingRequest) (*pb.Reply, error) {
