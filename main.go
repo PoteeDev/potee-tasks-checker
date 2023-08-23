@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	pb "github.com/PoteeDev/potee-tasks-checker/proto"
 	"google.golang.org/grpc"
@@ -42,7 +42,9 @@ func GetIntEnvDefault(env string, defaults int) int {
 var (
 	port      = flag.Int("port", 50051, "The server port")
 	timeout   = flag.Int("timeout", GetIntEnvDefault("TIMEOUT", 5), "timeot for request")
-	directory = flag.String("dir", GetSrtingEnvDefault("DIR", "examples"), "directory with scripts")
+	directory = flag.String("dir", GetSrtingEnvDefault("DIR", "scripts"), "directory with scripts")
+
+	script_update_period = flag.Int("update", GetIntEnvDefault("SCRIPT_UPDATE_PERIOD", 15), "period for update chackers scripts")
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -65,8 +67,6 @@ func RunCheckers(command string, result chan []*pb.Result) {
 	result <- resultStruct
 }
 
-var ()
-
 type Inventory struct {
 	Urls   interface{}
 	Flags  interface{}
@@ -74,7 +74,7 @@ type Inventory struct {
 }
 
 func GenerateInventory(m interface{}) string {
-	f, err := ioutil.TempFile("/tmp", "inventory-") // in Go version older than 1.17 you can use ioutil.TempFile
+	f, err := os.CreateTemp("/tmp", "inventory-") // in Go version older than 1.17 you can use ioutil.TempFile
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,6 +96,22 @@ func GenerateInventory(m interface{}) string {
 
 var scriptsSums = make(map[string]string)
 
+func InitScriptsUpdate() {
+	ticker := time.NewTicker(time.Duration(*script_update_period) * time.Second)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				DownloadScripts()
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+}
+
 func DownloadScripts() {
 
 	endpoint := os.Getenv("MINIO_HOST")
@@ -110,11 +126,6 @@ func DownloadScripts() {
 	})
 	if err != nil {
 		log.Fatalln(err)
-	}
-	err = minioClient.FGetObject(context.Background(), "scripts", "myobject", "/tmp/myobject", minio.GetObjectOptions{})
-	if err != nil {
-		fmt.Println(err)
-		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -140,7 +151,7 @@ func DownloadScripts() {
 
 		// download new version of script if it changed
 		if isNew {
-			err := minioClient.FGetObject(context.Background(), "scripts", object.Key, *directory+object.Key, minio.GetObjectOptions{})
+			err := minioClient.FGetObject(context.Background(), "scripts", object.Key, fmt.Sprintf("%s/%s", *directory, object.Key), minio.GetObjectOptions{})
 			if err != nil {
 				log.Println(err)
 			}
@@ -218,7 +229,7 @@ func (s *server) Exploit(ctx context.Context, in *pb.ExploitRequest) (*pb.Reply,
 func main() {
 	flag.Parse()
 
-	DownloadScripts()
+	InitScriptsUpdate()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
