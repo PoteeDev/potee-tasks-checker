@@ -32,5 +32,14 @@ async def test(s: ClientSession, url: str):
     return "no"
 
 
+@c.exploit("rce", method="http")
+async def test(s: ClientSession, url: str):
+    r = await s.get(f"http://{url}:5000/exploit")
+    answer = await r.text()
+    if answer == "yes":
+        return "yes"
+    return "no"
+
+
 if __name__ == "__main__":
     c.run()

@@ -12,8 +12,14 @@ COPY proto proto
 RUN CGO_ENABLED=0 GOOS=linux go build -o /chekcer
 
 # Deploy the application binary into a lean image
-FROM alpine
+FROM python:3-alpine
+
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
 
 COPY --from=build-stage /chekcer /chekcer
 
-ENTRYPOINT ["/chekcer"]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["/chekcer"]
